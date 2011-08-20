@@ -1,308 +1,350 @@
 package Perlude;
-use warnings;
-use strict;
-use 5.10.0;
+use Modern::Perl;
+use Carp qw< croak >;
+use Exporter qw< import >;
+our @EXPORT = qw<
+
+    enlist unfold
+    fold
+    takeWhile take drop
+    filter apply
+    traverse
+    cycle range
+    tuple
+    lines
+    concat
+
+>;
+
 use Carp;
 
-use parent 'Exporter';
-our @EXPORT = qw/
-    drop take takeWhile
-    fold unfold
-    filter mapC mapR 
-    cycle range
-    concat concatC concatMap
-    collectR sumR productR
-/;
+our $VERSION = '0.50';
 
-# TODO:
-# - UTs for records, lines, stream
-# - Documentations and examples
-# - examples
-
-our $VERSION = '0.42';
-
-sub take {
-    my ( $want_more, $some ) = @_;
-    sub { $want_more-- > 0 ?  $some->() : undef }
+# End-of-list value: always return itself, with no data
+{
+    my $NIL;
+    $NIL = sub { $NIL };
+    sub NIL() { $NIL }
 }
 
-sub drop {
-    my ( $remove, $some ) = @_; 
-    sub {
-        while ( $remove-- > 0 ) { $some->() or return }
-        $some->();
-    }   
-}
-
-sub takeWhile (&;$) {
-    my ( $test, $list ) = @_;
-    sub {
-        my $block = $list || shift;
-        local $_ = $block->();
-        defined or return undef;
-        $test->() ? $_ : undef;
-    }
-}
-
-sub fold ($) {
-    my ( $list ) = @_;
-    my @r;
-    while ( defined ( local $_ = $list->() ) ) { push @r,$_ }
-    @r;
-}
-
-sub mapR  (&;$) {
-    my ( $code, $list ) = @_;
-    $code->() while defined ( local $_ = $list->() );
-    ();
-}
-
-sub _apply {
-    my ( $filter, $block, $list ) = @_;
-    sub {
-        my $next = $list || shift;
-        while ( defined ( local $_ = $next->() ) ) {
-            if ( $filter ) { $block->() and return $_ }
-            else { return $block->() }
+# interface with the Perl world
+sub enlist (&) {
+    my ($i) = @_;
+    my ( $l, @b );
+    $l = sub {
+        if (@_) {
+            my $n = shift;
+            return ( $l, @b[ 0 .. $n - 1 ] ) if @b >= $n;    # there's enough
+            push @b, my @v = $i->();                         # need more
+            push @b, @v = $i->() while @b < $n && @v;        # MOAR
+            return ( $l, @b < $n ? @b : @b[ 0 .. $n - 1 ] ); # give it a peek
         }
-        return;
-    }
-}
-
-sub concat {
-    my $streams = shift or return sub { undef };
-    sub {
-        while ( @$streams ) {
-            my $r;
-            defined ( $r = $$streams[0]() ) and return $r;
-            shift @$streams;
+        else {
+            return ( $l, shift @b ) if @b;    # use the buffer first
+            push @b, $i->();                  # obtain more items
+            return @b ? ( $l, shift @b ) : NIL;
         }
-        return
-    }
-}
-
-sub concatC {
-    my $streams  = shift or return sub { undef };
-    my $s        = $streams->();
-    my $running = 1;
-    sub {
-        my $r;
-        while ($running) {
-            defined ( $r = $s->() ) and return $r;
-            defined ( $s = $streams->() ) or $running = 0;
-        }
-        undef;
-    }
-}
-
-sub mapC        (&;$) {         _apply ( 0, @_ ) }
-sub concatMap   (&;$) { concatC _apply ( 0, @_ ) }
-sub filter      (&;$) { _apply         ( 1, @_ ) }
-
-sub cycle {
-    my $cycle = shift;
-    my $index = 0;
-    sub {
-        my $r = $$cycle[$index];
-        if ( ++$index > $#$cycle ) { $index = 0 }
-        $r
     };
 }
 
-sub range {
-    my ( $min, $max, $step ) = @_;
-    defined $max or die "range without max";
-    $step ||= 1;
-    sub {
-        my $r = $min;
-        if ( $max >= $r ) {
-            $min+=$step;
-            $r;
-        } else { undef }
+sub concat {
+    my ($l, @ls)= @_;
+    my @v;
+    my $r;
+    $r = sub {
+        while ($l) {
+            ( $l, @v ) = $l->();
+            return ($r,@v) if @v;
+            $l = shift @ls;
+        }
+    };
+    $r
+}
+
+sub unfold (@) {
+    my @array = @_;
+    enlist { @array ? shift @array : () };
+}
+
+sub fold ($) {
+    my ($l) = @_;
+    my @v;
+    unless (wantarray) {
+        if ( defined wantarray ) {
+            my $n = 0;
+            $n += @v while 1 < ( ( $l, @v ) = $l->() );
+            return $n;
+        }
+        else {
+            # The real lazy one: when called in scalar context, values are
+            # ignored:
+            #     undef while defined ( $l = $l->() );
+            # But producers must be able to handle that
+            # So keep that for later and use the eager implementation for now
+            undef while 1 < ( ( $l, @v ) = $l->() );
+            return;
+        }
+    }
+    my @r;
+    push @r, @v while 1 < ( ( $l, @v ) = $l->() );
+    @r;
+}
+
+# stream consumers (lazy)
+sub takeWhile (&$) {
+    my ( $cond, $l ) = @_;
+    my $m;
+    $m = sub {
+        1 < ( ( $l, my @v ) = $l->() ) or return ($l);
+        return $cond->() ? ( $m, @v ) : ( sub { ( $l, @v ) } ) for @v;
+    };
+}
+
+sub filter (&$) {
+    my ( $cond, $l ) = @_;
+    my $m;
+    $m = sub {
+        while (1) {
+            1 < ( ( $l, my @v ) = $l->() ) or return ($l);
+            $cond->() and return ($m, @v) for @v;
+        }
+    };
+}
+
+sub take ($$) {
+    my ( $n, $l ) = @_;
+    my $m;
+    $m = sub {
+        $n-- > 0 or return ($l);
+        1 < ( ( $l, my @v ) = $l->() ) or return ($l);
+        ( $m, @v );
     }
 }
 
-sub unfold {
-    my $array = shift;
-    sub { shift @$array }
+sub drop ($$) {
+    my ( $n, $l ) = @_;
+    fold take $n, $l;
+    $l;
 }
 
-sub collectR (&$) {
-    my ( $code, $stream ) = @_;
-    my $r;
-    while ( defined ( local $_ = $stream->() )) { $r = $code->() }
-    $r;
+sub apply (&$) {
+    my ( $code, $l ) = @_;
+    my $m;
+    $m = sub {
+        1 < ( ( $l, my @v ) = $l->() ) or return $l;
+        ( $m, map $code->(), @v );
+    }
 }
 
-sub sumR     { collectR { state $sum = 0; $sum+=$_ } shift }
-sub productR { collectR { state $sum = 1; $sum*=$_ } shift }
+# stream consumers (exhaustive)
+sub traverse (&$) {
+    my ( $code, $l ) = @_;
+    my @b;
+    while (1) {
+        1 < ( ( $l, my @v ) = $l->() ) or return pop @b;
+        @b = map $code->(), @v;
+    }
+}
 
-sub records {
-    my ($source) = @_;
-    sub { <$source> }
+# stream generators
+sub cycle (@) {
+    (my @ring = @_) or return NIL;
+    my $index = -1;
+    enlist { $ring[ ( $index += 1 ) %= @ring ] }
+}
+
+sub range ($$;$) {
+    my $begin = shift // croak "range begin undefined";
+    my $end   = shift;
+    my $step  = shift // 1;
+
+    return NIL if $step == 0;
+
+    $begin -= $step;
+    my $l;
+    return $l = defined $end
+        ? $step > 0
+            ? sub { ( ( $begin += $step ) <= $end ) ? ( $l, $begin ) : ($l) }
+            : sub { ( ( $begin += $step ) >= $end ) ? ( $l, $begin ) : ($l) }
+        : sub { ( $l, $begin += $step ) };
+}
+
+
+sub tuple ($$) {
+    my ( $n, $l ) = @_;
+    croak "$n is not a valid parameter for tuple()" if $n <= 0;
+    my $m;
+    $m = sub {
+        $l = take $n, $l;
+        my (@r, @v);
+        push @r, @v while 1 < ( ( $l, @v ) = $l->() );
+        @r ? ( $m, \@r ) : ( $l )
+    }
 }
 
 sub lines {
-    open my $fh,shift;
-    if ($@) {
-	if ($_[0] ~~ 'chomp') {
-	    sub {
-		my $v = <$fh>;
-		chomp $v;
-		$v
-	    }
-	} else {
-	    croak 'your arguments iz invalid:'
-	    , join ',', @_
-	}
+    # private sub that coerce path to handles
+    state $fh_coerce = sub {
+        my $v = shift;
+        return $v if ref $v;
+        open my ($fh),$v;
+        $fh;
+    };
+    my $fh = $fh_coerce->( pop );
+
+    # only 2 forms accepted for the moment
+    # form 1: lines 'file'
+    @_ or return enlist { <$fh> // () };
+
+    # confess if not 2nd form
+    $_[0] ~~ 'chomp' or confess 'cannot handle parameters ' , join ',', @_ ;
+
+    # lines chomp => 'file'
+    enlist {
+        defined (my $v = <$fh>) or return;
+        chomp $v;
+        $v;
     }
-    else { records $fh }
+
 }
 
-sub stream {
-    my $source = shift;
-    my $method = shift;
-    my @args   = @_;
-    sub { $source->$method(@args) }
-}
+1;
 
 =head1 NAME
 
-Perlude - a prelude for perl
-
-=head1 VERSION
-
-Version 0.01
-
-=cut
+Perlude - an attempt to port a part of Haskell prelude in Perl
 
 =head1 SYNOPSIS
 
-Perlude functions are filters and consumers for generators (Closures). It
-adds keywords stolen from the haskell world and introduce some perl specific
-ones.
+Haskell prelude miss you when you write perl stuff? Perlude is a port of the
+most common keywords. Some other keywords where added when there is no haskell
+equivalent.
 
-=head1 Rules, naming and conventions
+Example: in haskell you can write
 
-A generator is a closure
+    nat        = [0..]
+    is_even x  = ( x `mod` 2 ) == 0
+    evens      = filter is_even
+    main       =  mapM_ print
+        $ take 10
+        $ evens nat
 
-* a scalar as a next element
+in perlude, the same code will be:
 
-* undef when exhausted
-
-The list of every potential elements of a generator is called "the stream".
-
-sub that takes and returns a closures is a filter, its name is postfixed with a C (mapC, ...).
-
-sub that takes a closure and consume (read) it is a Reader, its name is prefixed with a R (mapR,reduceR,sumR,productR, ...)
-
-keywords stolen from haskell are exceptions to the naming convention (filter,fold,unfold,...)
-
-from haskell: take, takeWhile, filter, fold, (unfold?) concat ...
-
-=head2 Notes for haskell users
-
-As perl doesn't have monads, M and M_ functions are replaced by C (for Closure)
-and R (for Reader). so 
-
-    mapM_ print    => mapR {say}
-    mapM  print    => mapC {say}
-    map (* 2)      => mapC { $_ * 2 }
-
-
-=head1 EXPORT
+    use Perlude;
+    my $nat = enlist { state $x = 0; $x++ };
+    sub is_even { ($_ % 2) == 0 }
+    sub evens   { filter {is_even} shift }
+    traverse {say} take 10, evens $nat
 
 =head1 FUNCTIONS
 
-=head2 take $n, $C
+=head2 relations between the computation world and perl
 
-take $n elements from $C
+=head3 enlist
 
-    fold take 10, sub { state $x=0; $x++ }
-    #  => 0..9
+enlist transform a coderef to a lazy list.
 
-=head2 takeWhile $test, $C
+    my $nat = enlist { state $x = 0; $x++ }
 
-take all the first elements from the closure that matches $test.
+$nat is a lazy list of the naturals.
 
-    fold takeWhile { $_ < 100 } fibonacci
-    # returns every terms of the fibonacci sequence under 100
+=head3 fold
 
-=head2 filter $test, $C
+consume a lazy list in an array
 
-remove any elements that matches $test from the steam (as grep does with arrays)
+    my @top10nat =
+        fold take 10,
+        enlist { state $x=0; $x++ }
 
-    filter { /3/ } fibonacci
+=head3 unfold
 
-removes every terms of fibonacci sequence that contains the digit 3 
+the conterpart of fold
 
-=head2 fold $C
+=head3 take
 
-fold every terms of the steam into an array
+take the n first elements of a lazy list
 
-    my @c4 = fold  take 50 filter {/4/} nat;
+=head3 takeWhile
 
-@c4 is the array of the first 50 naturals that contains the 4 digit
+returns the head of a lazy list that matches a crteria.
 
-=head2 unfold $array_ref
+    sub below { takeWhile { $_ < 1000 } shift }
+    say for fold below 1000, enlist { state $x=0; $x++ }
 
-stream the array elements
+=head3 drop, dropWhile
 
-    mapR {say if /5/ } unfold [1..5];
-    is like
-    map {say if /5/} 1..5;
-
-
-=head1 AUTHOR
-
-Marc Chantreux, C<< <khatar at phear.org> >>
-
-=head1 BUGS
-
-Please report any bugs or feature requests to C<bug-lazyness at rt.cpan.org>, or through
-the web interface at L<http://rt.cpan.org/NoAuth/ReportBug.html?Queue=Lazyness>.  I will be notified, and then you'll
-automatically be notified of progress on your bug as I make changes.
+like take and takeWhile but remove elements instead of returning them
 
 
-=head1 SUPPORT
+=head3 filter, apply
 
-You can find documentation for this module with the perldoc command.
+grep and map alike on lazy lists
 
-    perldoc Perlude
+    sub double { apply  { $_*2 } shift }
+    sub evens  { filter { ($_ % 2) == 0 } shift }
 
+=head3 traverse 
 
-You can also look for information at:
+eval the block for every element of the list.
+
+    traverse {say} take 10, unfold 0..13;
+
+=head3 concat
+
+bind lazy list together.
+
+    traverse {say} take 10, concat
+    ( unfold(1..5)
+    , unfold(20..67)
+    );
+
+=head3 misc. functions
+
+definitely need other namespaces for them!
+
+    cycle range tuple lines
+
+=head3 missing functions
+
+    foldl foldr
+
+=head1 AUTHORS
 
 =over 4
 
-=item * RT: CPAN's request tracker
+=item *
 
-L<http://rt.cpan.org/NoAuth/Bugs.html?Dist=Lazyness>
+Philippe Bruhat (BooK)
 
-=item * AnnoCPAN: Annotated CPAN documentation
+=item *
 
-L<http://annocpan.org/dist/Lazyness>
+Marc Chantreux (eiro)
 
-=item * CPAN Ratings
+=item *
 
-L<http://cpanratings.perl.org/d/Lazyness>
-
-=item * Search CPAN
-
-L<http://search.cpan.org/dist/Lazyness>
+Olivier MenguE<eacute> (dolmen)
 
 =back
 
-=head1 ACKNOWLEDGEMENTS
+=head1 ACKNOWLEDGMENTS 
 
+=over 4
 
-=head1 COPYRIGHT & LICENSE
+=item *
 
-Copyright 2010 Marc Chantreux, all rights reserved.
+High five with StE<eacute>phane Payrard (cognominal) and thanks to Nicolas Pouillard (#haskell-fr@freenode) for his help about haskell lazyness.
 
-This program is free software; you can redistribute it and/or modify it
-under the same terms as Perl itself.
+=item *
+
+French Perl Workshop 2011
+
+=item *
+
+Chartreuse Verte
+
+=back
 
 =cut
 
-1; # End of Lazyness
+
