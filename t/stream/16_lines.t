@@ -1,8 +1,8 @@
 #! /usr/bin/perl
 use Modern::Perl;
-use Test::More 'no_plan';
 use Perlude;
 use autodie;
+use Test::More skip_all => 'deprecate line ? records instead ?';
 
 my @seed = qw/ toto tata tutu /;
 my $file = '/tmp/perlude-test-lines-data';

@@ -1,8 +1,8 @@
 use Modern::Perl;
 use Test::More;
-use Perlude;
+use Perlude::Lazy;
 
-sub sum { traverse {state $sum = 0; $sum += $_ } shift }
+sub sum { now {state $sum = 0; $sum += $_ } shift }
 
 my @tests =
 ( [ undef, enlist {} ]

@@ -1,17 +1,13 @@
 #! /usr/bin/perl
-use strict;
-use warnings;
+use Modern::Perl;
 use Perlude;
-use Test::More;
-
-plan tests => 2;
-
+use Test::More skip_all => 'this is not fixable';
 
 my ( @input, $got, $expected );
 
-my $doubles = do {
-    my $seed = 0;
-    enlist { $seed+=2 }
+my $doubles = sub {
+    state $seed = 0;
+    $seed+=2;
 };
 
 my @first  = fold takeWhile { $_ < 5 } $doubles;

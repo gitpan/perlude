@@ -1,10 +1,10 @@
 {
-   "abstract" : "an attempt to port a part of Haskell prelude in Perl",
+   "abstract" : "Lazy lists for Perl",
    "author" : [
       "Marc Chantreux <marc.chantreux@biblibre.com>"
    ],
    "dynamic_config" : 1,
-   "generated_by" : "Module::Build version 0.38, CPAN::Meta::Converter version 2.110930001",
+   "generated_by" : "Module::Build version 0.38, CPAN::Meta::Converter version 2.110930",
    "license" : [
       "perl_5"
    ],
@@ -17,20 +17,33 @@
       "build" : {
          "requires" : {
             "Test::More" : 0,
-            "Test::Pod" : "1.22",
-            "YAML" : 0
+            "Test::Pod" : "1.22"
          }
       },
       "configure" : {
          "requires" : {
             "Module::Build" : "0.38"
          }
+      },
+      "runtime" : {
+         "requires" : {
+            "Modern::Perl" : 0,
+            "YAML" : 0
+         }
       }
    },
    "provides" : {
       "Perlude" : {
          "file" : "lib/Perlude.pm",
-         "version" : "0.50"
+         "version" : "0.51"
+      },
+      "Perlude::Lazy" : {
+         "file" : "lib/Perlude/Lazy.pm",
+         "version" : 0
+      },
+      "Perlude::builtins" : {
+         "file" : "lib/Perlude/builtins.pm",
+         "version" : 0
       }
    },
    "release_status" : "stable",
@@ -39,7 +52,7 @@
          "http://dev.perl.org/licenses/"
       ]
    },
-   "version" : "0.50",
+   "version" : "0.51",
    "x_bugtracker" : "https://rt.cpan.org/Dist/Display.html?Queue=Perlude",
    "x_homepage" : "https://github.com/eiro/p5-perlude",
    "x_repository" : "https://github.com/eiro/p5-perlude.git"
