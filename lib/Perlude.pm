@@ -1,5 +1,7 @@
 package Perlude;
-use Modern::Perl;
+use strict;
+use warnings;
+use 5.10.0;
 use Carp qw< croak >;
 use Exporter qw< import >;
 our @EXPORT = qw<
@@ -11,12 +13,30 @@ our @EXPORT = qw<
     tuple
     concat concatC concatM
     records lines 
-
+    pairs
 >; 
+
+# ABSTRACT: Shell and Powershell pipes, haskell keywords mixed with the awesomeness of perl. forget shell scrpting now! 
 
 use Carp;
 
-our $VERSION = '0.51';
+our $VERSION = '0.53';
+
+sub pairs ($) {
+    my ( $hash ) = @_;
+    sub {
+	while ( @$_ = each %$hash ) { return $_ }
+	()
+    }
+}
+
+# sub pairs (&$) {
+#     my ( $do, $on ) = @_;
+#     sub {
+# 	while ( @$_ = each %$on ) { return $do->() }
+# 	()
+#     }
+# }
 
 # private helpers
 sub _buffer ($) {
@@ -112,7 +132,7 @@ sub records {
     sub { <$source> // () }
 }
 
-sub lines ($) {
+sub lines (_) {
     open my( $fh ), shift;
     apply {chomp; $_} records $fh;
 }
@@ -184,51 +204,224 @@ sub tuple ($$) {
 
 1;
 
-=head1 WARNING
+=head1 BASICS and TERMS
 
-API Changes in version 0.51, please read the Changes file
+Perlude is a brunch of functions (mainly stolen from the haskell perlude) that ease programming with iterators by showing them as a steam (list of values that may be computed) instead of a sequence of calls. If you're used to a functionnal langage, the unix shell or the powershell: you're at home!
 
-=head1 NAME
+See a basic example (explanations and definition right after the code)
 
-Perlude - Lazy lists for Perl
+    sub seq { # the generator
+
+        my $max = shift;
+        my $x   = 1;
+
+        sub { # the iterator construction
+
+            # returning an empty list means that the stream is exhausted
+            return if $x > $max;
+
+            # else, return the next value of the stream
+            # (undef is a valid value!)
+            $x++;
+        }
+    }
+
+    my $to5 = seq 5; # the iterator
+    # remaining $to5 stream = 1, 2, 3, 4, 5
+
+    say "first iteration: ", $to5->();
+    # prints 1
+    # remaining $to5 stream = 2, 3, 4, 5
+
+    say join ', ', map $to5->(), 1..100;
+    # call the remaining stream: exhaustion
+
+    say to5->();
+    # says nothing: $to5 is an exhausted stream
+
+    # folding: store a stream in a array
+
+    $to5 = seq 75;
+
+    # fold 50 first values
+    my @first = map $to5->(), 1..50;
+
+    # fold 25 last  values
+    my @last = map $to5->(), 1..50;
+
+C<seq> is a "generator": a function that returns a an iterator.
+
+C<$to5> is an "iterator": is a function can compute a complete list by the mean of releasing one element by call.
+
+An "iteration" is the action of calling an iterator.
+
+Folding a stream is the action of releasing a set of the stream values in an array.
+
+We can see an empty list as a tail of any list as all those notations are equivalent
+
+    1, 2, 3, 4, 5
+    1, 2, 3, 4, 5,
+    1, 2, 3, 4, 5, ()
+
+So the empty list is used as convention to say that the stream is exhausted. Note that undef is a valid element of a stream. That's why is C<()> maybe called "bound" in this documentation. Note that Perlude functions are using array context to read the iterators so 
+
+    return unless $something_to_release
+
+will return () which is a valid way to end the stream
+
+=head1 SYNOPSIS
+
+    use Perlude;
+    use strictures;
+    use 5.10.0;
+
+    # iterator on a glob matches stolen from Perlude::Sh module
+    sub ls {
+        my $glob = glob shift;
+        my $match;
+        sub {
+            return $match while $match = <$glob>;
+            ();
+        }
+    }
+
+    # show every txt files in /tmp
+    now {say} ls "/tmp/*txt
+
+    # remove empty files from tmp
+    
+    now { unlink if -f && ! -s } ls "/tmp/*"
+
+    # something more reusable/readable ? 
+
+    sub is_empty_file { -f && ! -s }
+    sub empty_files_of { filter {is_empty_file} shift }
+    sub mv { now {unlink} shift }
+
+    mv empty_files_of ls "/tmp/*./txt";
 
 
-=head1 AUTHORS
+=head1 Functions
 
-=over 4
+=head2 Generators
 
-=item *
+=head3 range $begin, [ $end, [ $step ] ]
 
-Philippe Bruhat (BooK)
+A range of numbers from $begin to $end (infinity if $end isn't set) $step by $step. 
 
-=item *
+    range 5     # from 5 to infinity
+    range 5,9   # 5, 6, 7, 8, 9
+    range 5,9,2 # 5, 7, 9
 
-Marc Chantreux (eiro)
+=head3 cycle @set
 
-=item *
+infinitly loop on a set of values
 
-Olivier MenguE<eacute> (dolmen)
+    cycle 1,4,7
 
-=back
+    # 1,4,7,1,4,7,1,4,7,1,4,7,1,4,7,...
 
-=head1 ACKNOWLEDGMENTS 
+=head3 records $ref
 
-=over 4
+given any kind of ref that implements the "<>" iterator, returns a Perlude compliant iterator.
 
-=item *
+    now {print if /data/} records do {
+        open my $fh,"foo";
+        $fh;
+    };
 
-High five with StE<eacute>phane Payrard (cognominal)
+=head3 lines
 
-=item *
+same as records but chomp all records before release.
 
-French Perl Workshop 2011
-
-=item *
-
-Chartreuse Verte
-
-=back
-
-=cut
+    now {say if /data/} records do {
+        open my $fh,"foo";
+        $fh;
+    };
 
 
+=head2 filters
+
+    documentation WIP
+
+
+=head2 Exhausters
+
+    documentation WIP
+
+# =head2 Exhausters
+# 
+# =over
+# 
+# =item now {actions} $xs 
+# 
+# http://hackage.haskell.org/packages/archive/base/latest/doc/html/Prelude.html#v:take
+# 
+# =item take $n, $xs
+# 
+# applied to a list xs, returns the prefix of xs of length n, or xs itself if n > length xs
+# 
+#     take 5, range 1,10; # 1..5
+# 
+#     fold unfold 
+#     takeWhile take drop
+#     filter apply
+#     now
+#     tuple
+#     concat concatC concatM
+# 
+# =over
+# 
+# 
+# =head1 functions 
+# 
+# =head2 Consumers
+# 
+# =head3 now
+# 
+# C<now> makes the list ti be eager and returns the last element (eager would be better?).
+# 
+# =head3 fold
+# 
+# return an array of all computed elements
+# 
+# =head2 filters
+# 
+# =head3 transforming 
+# 
+#     fold unfold 
+#     takeWhile take drop
+#     filter apply
+#     now
+#     cycle range
+#     tuple
+#     concat concatC concatM
+#     records lines 
+# 
+# =head1 AUTHORS
+# 
+# =over 4
+# 
+# =item *
+# 
+# Philippe Bruhat (BooK)
+# 
+# =item *
+# 
+# Marc Chantreux (eiro)
+# 
+# =item *
+# 
+# Olivier MenguE<eacute> (dolmen)
+# 
+# =head1 ACKNOWLEDGMENTS 
+# 
+# =over 4
+# 
+# =item *
+# 
+# During the French Perl Workshop 2011, dolmen suggested to use () as stream terminator. So we (Book, dolmen and me) rewrote Perlude in one night, drinking a bottle of Chartreuse with the support of cognominal. 
+# 
+# =back
+# 
+# 
