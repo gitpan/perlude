@@ -20,7 +20,7 @@ my %WriteMakefileArgs = (
   'LICENSE' => 'perl',
   'NAME' => 'perlude',
   'PREREQ_PM' => {},
-  'VERSION' => '0.53',
+  'VERSION' => '0.54',
   'test' => {
     'TESTS' => 't/*.t t/lazy/*.t t/stream/*.t'
   }
