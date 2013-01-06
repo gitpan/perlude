@@ -42,9 +42,9 @@ A sysop example: throw your shellscripts away
 
     sub is_empty_file { -f && ! -s }
     sub empty_files_of { filter {is_empty_file} shift }
-    sub mv { now {unlink} shift }
+    sub rm { now {unlink} shift }
 
-    mv empty_files_of ls "/tmp/*./txt";
+    rm empty_files_of ls "/tmp/*./txt";
 
 =head1 BASICS and TERMS
 
@@ -94,7 +94,7 @@ See a basic example (explanations and definition right after the code)
     # fold 25 last  values
     my @last = map $to5->(), 1..50;
 
-C<seq> is a "generator": a function that returns a an iterator.
+C<seq> is a "generator": a function that returns an iterator.
 
 C<$to5> is an "iterator": is a function can compute a complete list by the mean of releasing one element by call.
 
@@ -230,6 +230,13 @@ returns the array of all the elements computed by $xs
 
 see also unfold
 
+=head3 nth $xs
+
+returns the nth element of a stream
+
+    say fold nth 5, sub { state $x=1; $x++ }
+    # 5
+
 =head2 Composers
 
 =head3 concat @streams
@@ -277,6 +284,10 @@ Marc Chantreux (eiro)
 Olivier MenguE<eacute> (dolmen)
 
 =back
+
+=head1 CONTRIBUTORS 
+
+Burak Gürsoy (cpanization)
 
 =head1 ACKNOWLEDGMENTS 
 

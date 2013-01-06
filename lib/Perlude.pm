@@ -14,13 +14,14 @@ our @EXPORT = qw<
     concat concatC concatM
     records lines 
     pairs
+    nth
 >; 
 
 # ABSTRACT: Shell and Powershell pipes, haskell keywords mixed with the awesomeness of perl. forget shell scrpting now! 
 
 use Carp;
 
-our $VERSION = '0.54';
+our $VERSION = '0.55';
 
 sub pairs ($) {
     my ( $hash ) = @_;
@@ -133,9 +134,13 @@ sub records {
 }
 
 sub lines (_) {
-    my $fh = shift;
-    ref $fh or open $fh, $fh;
-    apply {chomp; $_} records $fh;
+    apply {chomp; $_} records do {
+        if ( ref $_[0] ) {shift}
+        else {
+            open my $fh, shift;
+            $fh
+        }
+    }
 }
 
 sub concat {
@@ -201,6 +206,12 @@ sub tuple ($$) {
         my @v = fold take $n, $i;
         @v ? \@v : ();
     }
+}
+
+sub nth {
+    my ( $n, $s ) = @_;
+    $n--;
+    take 1, drop $n, $s 
 }
 
 1;
