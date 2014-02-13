@@ -1,4 +1,5 @@
 package Perlude;
+use Perlude::Open;
 use strict;
 use warnings;
 use 5.10.0;
@@ -15,20 +16,40 @@ our @EXPORT = qw<
     records lines 
     pairs
     nth
+    chunksOf
+    open_file
 >; 
 
 # ABSTRACT: Shell and Powershell pipes, haskell keywords mixed with the awesomeness of perl. forget shell scrpting now! 
 
 use Carp;
 
-our $VERSION = '0.55';
+our $VERSION = '0.56';
 
 sub pairs ($) {
-    my ( $hash ) = @_;
-    sub {
-	while ( @$_ = each %$hash ) { return $_ }
-	()
+    my ( $ref ) = @_;
+    my $isa = ref $ref or die "'$ref' isn't a ref";
+
+    # TODO: use reftypes here!
+    if ($isa eq 'HASH') {
+        sub {
+            my @pair;
+            while ( @pair = each %$ref ) { return \@pair }
+            ()
+        }
     }
+    # elsif ($isa eq 'ARRAY') {
+    #     my $index = 1;
+    #     sub {
+    #         return if $index > @$ref;
+    #         my $r =
+    #             [ $$ref[$index-1]
+    #             , $$ref[$index] ];
+    #         $index+=2;
+    #         $r;
+    #     }
+    # }
+    else { die "can't pair this kind of ref: $isa" }
 }
 
 # sub pairs (&$) {
@@ -133,13 +154,14 @@ sub records {
     sub { <$source> // () }
 }
 
-sub lines (_) {
-    apply {chomp; $_} records do {
-        if ( ref $_[0] ) {shift}
-        else {
-            open my $fh, shift;
-            $fh
-        }
+
+sub lines {
+    my $fh = &open_file;
+    my $line;
+    sub {
+        return unless defined ( $line = <$fh> );
+        chomp $line;
+        $line;
     }
 }
 
@@ -178,7 +200,7 @@ sub cycle (@) {
     sub { $ring[ ( $index += 1 ) %= @ring ] }
 }
 
-sub range ($$;$) {
+sub range {
     my $begin = shift // croak "range begin undefined";
     my $end   = shift;
     my $step  = shift // 1;
@@ -213,6 +235,31 @@ sub nth {
     $n--;
     take 1, drop $n, $s 
 }
+
+sub chunksOf ($$;$) {
+
+    my ( $n, $src, $offset ) = @_;
+    $n > 1 or die "chunksOf must be at least 1 (don't forget unfold)";
+    $offset //= 0;
+
+    my  ( $end   , $exhausted , $from, $to )
+    =   ( $#$src , 0 );
+
+    sub {
+        return if $exhausted;
+
+        ( $from   , $offset      )=
+        ( $offset , $offset + $n );
+
+        $end <= ($to = $offset - 1) and do {
+            $exhausted=1;
+            $to = $end;
+        };
+
+        [ @{$src}[$from..$to] ];
+    }
+}
+
 
 1;
 

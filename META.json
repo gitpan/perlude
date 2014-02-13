@@ -1,10 +1,10 @@
 {
-   "abstract" : "Lazy lists for Perl",
+   "abstract" : "Shell and Powershell pipes, haskell keywords mixed with the awesomeness of perl. forget shell scrpting now! ",
    "author" : [
-      "Marc Chantreux <marc.chantreux@biblibre.com>"
+      "Marc Chantreux <khatar@phear.org>"
    ],
-   "dynamic_config" : 1,
-   "generated_by" : "Module::Build version 0.38, CPAN::Meta::Converter version 2.110930",
+   "dynamic_config" : 0,
+   "generated_by" : "Dist::Zilla version 5.012, CPAN::Meta::Converter version 2.132830",
    "license" : [
       "perl_5"
    ],
@@ -12,48 +12,40 @@
       "url" : "http://search.cpan.org/perldoc?CPAN::Meta::Spec",
       "version" : "2"
    },
-   "name" : "Perlude",
+   "name" : "perlude",
    "prereqs" : {
-      "build" : {
-         "requires" : {
-            "Test::More" : 0,
-            "Test::Pod" : "1.22"
-         }
-      },
       "configure" : {
          "requires" : {
-            "Module::Build" : "0.38"
+            "ExtUtils::MakeMaker" : "6.30"
          }
       },
       "runtime" : {
          "requires" : {
-            "Modern::Perl" : 0,
-            "YAML" : 0
+            "Carp" : "0",
+            "Exporter" : "0",
+            "Modern::Perl" : "0",
+            "perl" : "v5.10.0",
+            "strict" : "0",
+            "warnings" : "0"
          }
-      }
-   },
-   "provides" : {
-      "Perlude" : {
-         "file" : "lib/Perlude.pm",
-         "version" : "0.51"
       },
-      "Perlude::Lazy" : {
-         "file" : "lib/Perlude/Lazy.pm",
-         "version" : 0
-      },
-      "Perlude::builtins" : {
-         "file" : "lib/Perlude/builtins.pm",
-         "version" : 0
+      "test" : {
+         "requires" : {
+            "Test::More" : "0",
+            "YAML" : "0",
+            "autodie" : "0"
+         }
       }
    },
    "release_status" : "stable",
    "resources" : {
-      "license" : [
-         "http://dev.perl.org/licenses/"
-      ]
+      "homepage" : "https://github.com/eiro/p5-perlude",
+      "repository" : {
+         "type" : "git",
+         "url" : "https://github.com/eiro/p5-perlude.git",
+         "web" : "https://github.com/eiro/p5-perlude"
+      }
    },
-   "version" : "0.51",
-   "x_bugtracker" : "https://rt.cpan.org/Dist/Display.html?Queue=Perlude",
-   "x_homepage" : "https://github.com/eiro/p5-perlude",
-   "x_repository" : "https://github.com/eiro/p5-perlude.git"
+   "version" : "0.56"
 }
+

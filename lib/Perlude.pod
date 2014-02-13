@@ -147,9 +147,36 @@ given any kind of ref that implements the "<>" iterator, returns a Perlude compl
         $fh;
     };
 
+=head3 as_open
+
+just easier (yet safer?) to use wrapper on the sub described in C<perldoc -f open>
+(also L<perlfunc/open>). 
+
+the goal is to have an wrapper on open does a coercion (just return @_ if nothing to do). so
+
+=item * 
+
+don't carre about prototype (so you can call it with an array, not only a list)
+
+=item *
+
+return a FILEHANDLE instead of having a side effect on the first variable
+
+=item *
+
+just return a FILEHANDLE passed as argument (so it's a coercion from C<@_> to an open handler). 
+
+    open FILEHANDLE
+    open EXPR
+    open MODE,EXPR
+    open MODE,EXPR,LIST
+    open MODE,EXPR,REF 
+
+
+
+
 =head3 lines
 
-same as records but chomp all records before release.
 
     now {say if /data/} records do {
         open my $fh,"foo";
@@ -212,6 +239,34 @@ unfold returns an iterator on the $array ref so that every Perlude goodies can b
 
 see also fold
 
+=head3 pairs $hash
+
+returns an iterator on the pairs of $hash stored in a 2 items array ref.
+
+    now {
+        my ( $k, $v ) = @$_;
+        say "$k : $v";
+    } pairs {qw< a A b B >};
+
+aims to be equivalent to
+
+    my $hash = {qw< a A b B >};
+    while ( my ( $k, $v ) = each %$hash ) {
+        say "$k : $v";
+    }
+
+except that:
+
+=over 4
+
+=item pairs can use an anonymous hash
+
+=item can be used in streams
+
+=item i hate the while syntax 
+
+=back
+
 =head2 Exhausters
 
 =head3 now {actions} $xs
@@ -236,6 +291,15 @@ returns the nth element of a stream
 
     say fold nth 5, sub { state $x=1; $x++ }
     # 5
+
+=head3 chunksOf
+
+non destructive splice alike (maybe best named as "traverse"? haskell name?).
+you can traverse an array by a group of copies of elements
+
+    say "@$_" for fold chunksOf 3, ['a'..'f'];
+    # a b c
+    # d e f
 
 =head2 Composers
 
@@ -266,6 +330,16 @@ expose them as a single stream.
 
     sub cat { concatM {lines} ls shift } 
     cat "/tmp/*.conf"
+
+=head1 TODO
+
+feedbacks are very welcome, todo list: 
+
+    * Improve the doc
+
+github
+
+    http://github.com/eiro/p5-perlude
 
 =head1 AUTHORS
 
