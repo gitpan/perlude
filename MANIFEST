@@ -8,6 +8,7 @@ META.yml
 Makefile.PL
 README
 README.textile
+Roadmap
 dist.ini
 eg/euler.pl
 lib/Perlude.pm
